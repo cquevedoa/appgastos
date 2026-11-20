@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Control Financiero</title>
+
+  <!-- PWA Manifest & Mobile Meta -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" id="metaThemeColor" content="#0B57D0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gastos">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,1,0" rel="stylesheet">
+
+  <link rel="stylesheet" href="./styles.css">
+
+  <!-- Google Identity Services (Sign In With Google) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+  <!-- ==================== VISTA DE INICIO DE SESIÓN ==================== -->
+  <main id="authView" class="auth-shell hidden">
+    <section class="auth-card">
+      <div class="auth-logo">
+        <span class="material-symbols-rounded">account_balance_wallet</span>
+      </div>
+      <h1 class="auth-title">Control Financiero</h1>
+      <p class="auth-subtitle">
+        Iniciá sesión con una de las dos cuentas de Google autorizadas para sincronizar tus gastos con Google Sheets.
+      </p>
+
+      <div id="googleSignInContainer" class="google-btn-wrap"></div>
+
+      <div class="auth-note">
+        <span class="material-symbols-rounded" style="font-size:15px;">verified_user</span>
+        <span>Acceso exclusivo · 2 correos autorizados</span>
+      </div>
+
+      <div id="authStatusMsg" class="auth-alert hidden"></div>
+    </section>
+
+    <div style="display:flex; justify-content:center;">
+      <button type="button" class="icon-btn" id="btnThemeAuth" aria-label="Cambiar tema" title="Cambiar tema">
+        <span class="material-symbols-rounded" id="themeIconAuth">brightness_auto</span>
+      </button>
+    </div>
+  </main>
+
+  <!-- ==================== VISTA PRINCIPAL DE LA PWA ==================== -->
+  <main id="appView" class="app-shell hidden">
+
+    <!-- TOP BAR -->
+    <header class="top-bar">
+      <div class="user-pill">
+        <div id="userAvatar" class="user-avatar">G</div>
+        <div class="user-meta">
+          <div class="app-brand">Control Financiero</div>
+          <div id="syncSubtext" class="sync-subtext">Sincronizando...</div>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <button type="button" id="btnSync" class="icon-btn" title="Sincronizar con Google Sheets" aria-label="Sincronizar">
+          <span class="material-symbols-rounded">sync</span>
+        </button>
+        <button type="button" id="btnTheme" class="icon-btn" title="Tema: Automático / Oscuro / Claro" aria-label="Cambiar tema">
+          <span class="material-symbols-rounded" id="themeIcon">brightness_auto</span>
+        </button>
+        <button type="button" id="btnLogout" class="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión">
+          <span class="material-symbols-rounded">logout</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- BANNER INSTALAR PWA -->
+    <div id="installBanner" class="status-banner install hidden">
+      <div class="status-banner-left">
+        <span class="material-symbols-rounded">install_mobile</span>
+        <span>Instalá la app en tu pantalla de inicio</span>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button type="button" id="btnInstallPwa" class="banner-action-btn">Instalar</button>
+        <button type="button" id="btnDismissInstall" class="banner-action-btn" aria-label="Cerrar">✕</button>
+      </div>
+    </div>
+
+    <!-- BANNER OFFLINE / COLA PENDIENTE -->
+    <div id="offlineBanner" class="status-banner offline hidden">
+      <div class="status-banner-left">
+        <span class="material-symbols-rounded" id="offlineBannerIcon">cloud_off</span>
+        <span id="offlineBannerText">Sin conexión · Mostrando datos guardados</span>
+      </div>
+      <button type="button" id="btnSyncQueue" class="banner-action-btn hidden">Sincronizar</button>
+    </div>
+
+    <!-- 1. TARJETA HERO & DESGLOSE INTEGRADO -->
+    <section class="hero-card" id="heroCard">
+      <div class="hero-top">
+        <span class="hero-label">
+          <span class="material-symbols-rounded" style="font-size:17px;">account_balance_wallet</span>
+          Saldo Global (Toca para ver cuentas)
+        </span>
+        <button type="button" class="btn-eye" id="btnPrivacidad" aria-label="Ocultar o mostrar montos">
+          <span id="eyeIcon" class="material-symbols-rounded" style="font-size:19px;">visibility</span>
+        </button>
+      </div>
+
+      <div class="hero-balance">
+        <span id="valSaldoGlobal">$ ---</span>
+        <span id="chevronDesglose" class="material-symbols-rounded" style="transition: transform 0.2s;">expand_more</span>
+      </div>
+
+      <!-- Desglose integrado de cuentas -->
+      <div id="heroDesgloseCuentas" class="hero-desglose">
+        <div id="listaCuentasDesglose">
+          <div class="empty-state" style="color:#fff;">Cargando cuentas...</div>
+        </div>
+      </div>
+
+      <div class="month-panel" id="monthPanel">
+        <div class="month-header">
+          <span id="lblMesActual">Resumen del mes</span>
+          <span id="lblPorcentajeGasto">0% usado</span>
+        </div>
+        <div class="month-grid">
+          <div class="metric-pill">
+            <div class="metric-title"><span class="material-symbols-rounded" style="font-size:13px;color:#A8DAB5;">arrow_downward</span>Ingresos</div>
+            <div id="valIngresosMes" class="metric-val">$ ---</div>
+          </div>
+          <div class="metric-pill">
+            <div class="metric-title"><span class="material-symbols-rounded" style="font-size:13px;color:#F6AEA9;">arrow_upward</span>Gastado</div>
+            <div id="valGastadoMes" class="metric-val">$ ---</div>
+          </div>
+          <div class="metric-pill">
+            <div class="metric-title"><span class="material-symbols-rounded" style="font-size:13px;color:#A8C7FA;">savings</span>Restante</div>
+            <div id="valRestanteMes" class="metric-val">$ ---</div>
+          </div>
+        </div>
+        <div class="progress-track"><div id="barraMes" class="progress-fill"></div></div>
+      </div>
+    </section>
+
+    <!-- 2. BOTÓN ACORDEÓN NUEVA OPERACIÓN -->
+    <button type="button" class="btn-nuevo-toggle" id="btnToggleForm">
+      <span class="material-symbols-rounded" id="iconToggleForm">add_circle</span>
+      <span id="lblBtnToggleForm">Nueva Operación</span>
+    </button>
+
+    <!-- FORMULARIO DE CARGA / EDICIÓN -->
+    <section class="surface-card" id="formContainerCard">
+      <div class="section-title">
+        <div class="section-title-left">
+          <span class="material-symbols-rounded" style="color:var(--md-sys-color-primary);" id="formTitleIcon">add_circle</span>
+          <span id="formTitleText">Registrar Operación</span>
+        </div>
+        <button type="button" class="btn-close-inline" id="btnCloseForm" aria-label="Cerrar formulario">
+          <span class="material-symbols-rounded" style="font-size:18px;">close</span>
+        </button>
+      </div>
+
+      <div class="tipo-nav">
+        <button type="button" class="tipo-btn active" data-tipo="Egreso"><span class="material-symbols-rounded">shopping_bag</span>Egreso</button>
+        <button type="button" class="tipo-btn" data-tipo="Ingreso"><span class="material-symbols-rounded">payments</span>Ingreso</button>
+        <button type="button" class="tipo-btn" data-tipo="Transferencia"><span class="material-symbols-rounded">swap_horiz</span>Transf.</button>
+        <button type="button" class="tipo-btn" data-tipo="Pago TDC"><span class="material-symbols-rounded">credit_score</span>Pago TDC</button>
+      </div>
+
+      <form id="mainForm" novalidate>
+        <input type="hidden" id="tipoOperacion" value="Egreso">
+        <input type="hidden" id="editandoTipo" value="">
+        <input type="hidden" id="editandoRow" value="">
+
+        <div class="field-row">
+          <div>
+            <label for="monto"><span class="material-symbols-rounded">attach_money</span>Monto</label>
+            <div class="monto-wrapper">
+              <span class="monto-prefix">$</span>
+              <input type="text" class="monto" id="monto" inputmode="decimal" autocomplete="off" placeholder="0,00">
+            </div>
+          </div>
+          <div>
+            <label for="fecha"><span class="material-symbols-rounded">calendar_today</span>Fecha</label>
+            <input type="date" id="fecha">
+          </div>
+        </div>
+
+        <div id="divCat" class="field-group">
+          <label id="lblSubcategoria" for="subcategoria"><span class="material-symbols-rounded">category</span>Categoría / Subcategoría</label>
+          <select id="subcategoria"><option value="">Cargando...</option></select>
+        </div>
+
+        <div class="field-group">
+          <label id="lblOrigen" for="medioPago"><span class="material-symbols-rounded">account_balance</span>Medio de Pago</label>
+          <select id="medioPago"><option value="">Cargando...</option></select>
+        </div>
+
+        <div id="divDestino" class="field-group hidden">
+          <label id="lblDestino" for="cuentaDestino"><span class="material-symbols-rounded">arrow_forward</span>Cuenta Destino</label>
+          <select id="cuentaDestino"></select>
+        </div>
+
+        <div id="divCuotas" class="field-group hidden">
+          <label for="cuotas" style="color:var(--fin-tdc);"><span class="material-symbols-rounded">calendar_month</span>Cantidad de Cuotas</label>
+          <input type="number" id="cuotas" value="1" min="1" max="60">
+        </div>
+
+        <div class="field-group">
+          <label for="descripcion"><span class="material-symbols-rounded">notes</span>Descripción (opcional)</label>
+          <input type="text" id="descripcion" placeholder="Ej. Supermercado, cuota, detalle...">
+        </div>
+
+        <button type="submit" id="submitBtn" disabled>
+          <span class="material-symbols-rounded">check_circle</span>
+          <span id="submitBtnText">CARGANDO...</span>
+        </button>
+      </form>
+      <div id="msg"></div>
+    </section>
+
+    <!-- 3. ÚLTIMOS MOVIMIENTOS + BÚSQUEDA Y FILTROS -->
+    <section class="surface-card">
+      <div class="section-title">
+        <div class="section-title-left">
+          <span class="material-symbols-rounded" style="color:var(--md-sys-color-primary);">history</span>
+          <span>Últimos Movimientos</span>
+        </div>
+        <span id="lblContadorMovs" style="font-size:11px;color:var(--md-sys-color-on-surface-variant);font-weight:600;"></span>
+      </div>
+
+      <!-- Búsqueda y filtros -->
+      <div class="filters-box">
+        <div class="search-wrap">
+          <span class="material-symbols-rounded search-ico">search</span>
+          <input type="search" id="searchMovs" class="search-input" placeholder="Buscar por categoría, cuenta o detalle..." autocomplete="off">
+          <button type="button" id="btnClearSearch" class="search-clear hidden" aria-label="Limpiar búsqueda">
+            <span class="material-symbols-rounded" style="font-size:17px;">close</span>
+          </button>
+        </div>
+
+        <div class="filter-selects">
+          <select id="filterMes" class="filter-select" aria-label="Filtrar por mes">
+            <option value="">Todos los meses</option>
+          </select>
+          <select id="filterTipo" class="filter-select" aria-label="Filtrar por tipo">
+            <option value="">Todos los tipos</option>
+            <option value="egreso">Egresos</option>
+            <option value="ingreso">Ingresos</option>
+            <option value="transferencia">Transferencias</option>
+            <option value="pago_tdc">Pagos TDC</option>
+          </select>
+          <select id="filterCuenta" class="filter-select" aria-label="Filtrar por cuenta">
+            <option value="">Todas las cuentas</option>
+          </select>
+        </div>
+
+        <div id="filterSummary" class="filter-summary hidden">
+          <span id="filterSummaryText"></span>
+          <button type="button" id="btnResetFilters" class="filter-reset-btn">Limpiar</button>
+        </div>
+      </div>
+
+      <div id="movList" class="mov-list">
+        <div class="empty-state">Cargando movimientos...</div>
+      </div>
+
+      <button type="button" id="btnVerMas" class="btn-ver-mas hidden">
+        <span class="material-symbols-rounded" style="font-size:18px;">expand_more</span>
+        <span id="btnVerMasText">Ver más movimientos</span>
+      </button>
+    </section>
+
+  </main>
+
+  <!-- MODAL ACCIONES MOVIMIENTO (EDITAR / BORRAR) -->
+  <div id="modalAcciones" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <span id="tituloAccionesModal">Opciones de Movimiento</span>
+        <button type="button" class="modal-close" data-close-modal="modalAcciones" aria-label="Cerrar">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+      <div id="modalAccionesInfo" style="font-size:12.5px; color:var(--md-sys-color-on-surface-variant); margin-bottom:14px;"></div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button type="button" id="btnEditarMov" class="btn-ver-mas" style="background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container); border:none; margin:0;">
+          <span class="material-symbols-rounded">edit</span> Editar Movimiento
+        </button>
+        <button type="button" id="btnBorrarMov" class="btn-ver-mas" style="background:var(--fin-expense-bg); color:var(--fin-expense); border:none; margin:0;">
+          <span class="material-symbols-rounded">delete</span> <span id="lblBtnBorrarMov">Borrar Movimiento</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL CONFIRMACIÓN DE BORRADO -->
+  <div id="modalConfirmarBorrar" class="modal-overlay">
+    <div class="modal-sheet" style="text-align: center; padding: 24px 20px;">
+      <div style="width: 50px; height: 50px; background: var(--fin-expense-bg); color: var(--fin-expense); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;">
+        <span class="material-symbols-rounded" style="font-size: 28px;">warning</span>
+      </div>
+      <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">¿Borrar movimiento?</div>
+      <div id="txtDetalleBorrar" style="font-size: 13px; color: var(--md-sys-color-on-surface-variant); margin-bottom: 20px;">Esta acción eliminará el registro de la planilla permanentemente.</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <button type="button" class="btn-ver-mas" data-close-modal="modalConfirmarBorrar" style="margin:0; background:var(--md-sys-color-surface-container-low); color:var(--md-sys-color-on-surface); border:none;">Cancelar</button>
+        <button type="button" id="btnConfirmarBorrarFinal" class="btn-ver-mas" style="margin:0; background:var(--fin-expense-bg); color:var(--fin-expense); border:none;">Sí, Borrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="./config.js"></script>
+  <script src="./storage.js"></script>
+  <script src="./api.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
