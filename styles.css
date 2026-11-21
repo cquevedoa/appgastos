@@ -139,6 +139,12 @@ body {
   justify-content: center;
   min-height: 44px;
   margin-bottom: 14px;
+  color-scheme: light;
+}
+
+.google-btn-wrap iframe {
+  color-scheme: light;
+  background: transparent;
 }
 
 .auth-note {
@@ -356,6 +362,18 @@ body {
   position: relative;
   overflow: hidden;
   cursor: pointer;
+  max-height: 680px;
+  transition: max-height 0.35s ease, padding 0.35s ease, opacity 0.25s ease, margin-bottom 0.25s ease, box-shadow 0.25s ease;
+}
+
+.app-shell.form-open .hero-card {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-bottom: -14px;
+  opacity: 0;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .hero-top {
@@ -507,9 +525,21 @@ body {
   gap: 8px;
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(11, 87, 208, 0.28);
-  transition: transform 0.1s;
+  max-height: 80px;
+  overflow: hidden;
+  transition: transform 0.1s, max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease, box-shadow 0.2s ease;
 }
 .btn-nuevo-toggle:active { transform: scale(0.98); }
+
+.app-shell.form-open .btn-nuevo-toggle {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-bottom: -14px;
+  opacity: 0;
+  box-shadow: none;
+  pointer-events: none;
+}
 
 /* --- TARJETAS DE CONTENIDO --- */
 .surface-card {
@@ -525,15 +555,19 @@ body {
   overflow: hidden;
   padding: 0 18px;
   border: none;
-  margin-top: -14px;
+  margin-bottom: -14px;
   opacity: 0;
-  transition: max-height 0.35s ease, padding 0.35s ease, opacity 0.25s ease, margin-top 0.25s ease;
+  transform: translateY(18px);
+  pointer-events: none;
+  transition: max-height 0.35s ease, padding 0.35s ease, opacity 0.25s ease, margin-bottom 0.25s ease, transform 0.3s ease;
 }
 #formContainerCard.open {
-  max-height: 980px;
+  max-height: 1100px;
   padding: 18px;
-  margin-top: 0;
+  margin-bottom: 0;
   opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
   border: 1px solid var(--card-border);
 }
 

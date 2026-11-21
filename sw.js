@@ -1,14 +1,14 @@
-const CACHE_VERSION = 'appgastos-pwa-v3';
+const CACHE_VERSION = 'appgastos-pwa-v6';
 const FONT_CACHE = 'appgastos-fonts-v1';
 
 const APP_SHELL_ASSETS = [
   './',
   './index.html',
-  './styles.css?v=3',
+  './styles.css?v=5',
   './config.js',
   './storage.js?v=3',
   './api.js?v=3',
-  './app.js?v=3',
+  './app.js?v=6',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

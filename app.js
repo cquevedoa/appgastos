@@ -136,6 +136,10 @@
     const iconName = mode === 'auto' ? 'brightness_auto' : (mode === 'dark' ? 'dark_mode' : 'light_mode');
     if ($('themeIcon')) $('themeIcon').textContent = iconName;
     if ($('themeIconAuth')) $('themeIconAuth').textContent = iconName;
+
+    if (gsiInicializado && $('authView') && !$('authView').classList.contains('hidden')) {
+      inicializarBotonGoogle();
+    }
   }
 
   function rotarTema() {
@@ -272,7 +276,21 @@
     }
   }
 
+  function abrirConfirmacionLogout() {
+    const pendientes = window.AppStorage.getQueue().length;
+    const detalle = $('txtDetalleLogout');
+    if (pendientes > 0) {
+      detalle.textContent = `Tenés ${pendientes} ${pendientes === 1 ? 'operación pendiente' : 'operaciones pendientes'} de sincronizar. Tendrás que volver a iniciar sesión con tu cuenta de Google para acceder a tus gastos.`;
+    } else if (usuarioActual && usuarioActual.email) {
+      detalle.textContent = `Se cerrará la sesión de ${usuarioActual.email}. Tendrás que volver a iniciar sesión con Google para acceder.`;
+    } else {
+      detalle.textContent = 'Tendrás que volver a iniciar sesión con tu cuenta de Google para acceder a tus gastos.';
+    }
+    $('modalConfirmarLogout').classList.add('active');
+  }
+
   function cerrarSesion() {
+    document.querySelectorAll('.modal-overlay.active').forEach((m) => m.classList.remove('active'));
     window.AppStorage.clearSession();
     window.AppStorage.clearCachedData();
     datos = null;
@@ -731,10 +749,19 @@
 
   function toggleFormulario(abrir) {
     const card = $('formContainerCard');
+    const shell = $('appView');
     const isOpen = abrir !== undefined ? abrir : !card.classList.contains('open');
     card.classList.toggle('open', isOpen);
+    if (shell) shell.classList.toggle('form-open', isOpen);
     $('iconToggleForm').textContent = isOpen ? 'expand_less' : 'add_circle';
-    if (!isOpen) limpiarFormularioEdicion();
+    if (isOpen) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      limpiarFormularioEdicion();
+      if (window.scrollY > 0) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
   }
 
   function llenarSelect(id, lista, placeholder) {
@@ -979,7 +1006,6 @@
     $('formTitleText').textContent = 'Editar Operación';
     $('formTitleIcon').textContent = 'edit';
     $('submitBtnText').textContent = 'ACTUALIZAR OPERACIÓN';
-    $('formContainerCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function ejecutarBorrarMovimiento() {
@@ -1775,7 +1801,7 @@
     $('btnThemeAuth').addEventListener('click', rotarTema);
     $('btnSync').addEventListener('click', () => sincronizarTodo({ silencioso: false }));
     $('btnSyncQueue').addEventListener('click', () => sincronizarTodo({ silencioso: false }));
-    $('btnLogout').addEventListener('click', cerrarSesion);
+    $('btnLogout').addEventListener('click', abrirConfirmacionLogout);
 
     $('heroCard').addEventListener('click', () => toggleDesgloseCuentas());
     $('heroDesgloseCuentas').addEventListener('click', (e) => e.stopPropagation());
@@ -1881,6 +1907,7 @@
     $('btnEditarMov').addEventListener('click', ejecutarEditarMovimiento);
     $('btnBorrarMov').addEventListener('click', ejecutarBorrarMovimiento);
     $('btnConfirmarBorrarFinal').addEventListener('click', confirmarBorrarMovimientoFinal);
+    $('btnConfirmarLogoutFinal').addEventListener('click', cerrarSesion);
   }
 
   // ==========================================================================

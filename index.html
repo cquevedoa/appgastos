@@ -20,7 +20,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,1,0" rel="stylesheet">
 
-  <link rel="stylesheet" href="./styles.css?v=3">
+  <link rel="stylesheet" href="./styles.css?v=5">
 
   <!-- Google Identity Services (Sign In With Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -154,13 +154,7 @@
       </div>
     </section>
 
-    <!-- 2. BOTÓN ACORDEÓN NUEVA OPERACIÓN -->
-    <button type="button" class="btn-nuevo-toggle" id="btnToggleForm">
-      <span class="material-symbols-rounded" id="iconToggleForm">add_circle</span>
-      <span id="lblBtnToggleForm">Nueva Operación</span>
-    </button>
-
-    <!-- FORMULARIO DE CARGA / EDICIÓN -->
+    <!-- FORMULARIO DE CARGA / EDICIÓN (se despliega hacia arriba al inicio del área visible) -->
     <section class="surface-card" id="formContainerCard">
       <div class="section-title">
         <div class="section-title-left">
@@ -259,6 +253,12 @@
       </form>
       <div id="msg"></div>
     </section>
+
+    <!-- 2. BOTÓN ACORDEÓN NUEVA OPERACIÓN -->
+    <button type="button" class="btn-nuevo-toggle" id="btnToggleForm">
+      <span class="material-symbols-rounded" id="iconToggleForm">add_circle</span>
+      <span id="lblBtnToggleForm">Nueva Operación</span>
+    </button>
 
     <!-- 3. ÚLTIMOS MOVIMIENTOS + BÚSQUEDA Y FILTROS -->
     <section class="surface-card">
@@ -363,6 +363,21 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
         <button type="button" class="btn-ver-mas" data-close-modal="modalConfirmarBorrar" style="margin:0; background:var(--md-sys-color-surface-container-low); color:var(--md-sys-color-on-surface); border:none;">Cancelar</button>
         <button type="button" id="btnConfirmarBorrarFinal" class="btn-ver-mas" style="margin:0; background:var(--fin-expense-bg); color:var(--fin-expense); border:none;">Sí, Borrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL CONFIRMACIÓN DE CIERRE DE SESIÓN -->
+  <div id="modalConfirmarLogout" class="modal-overlay">
+    <div class="modal-sheet" style="text-align: center; padding: 24px 20px;">
+      <div style="width: 50px; height: 50px; background: var(--fin-expense-bg); color: var(--fin-expense); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;">
+        <span class="material-symbols-rounded" style="font-size: 28px;">logout</span>
+      </div>
+      <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">¿Cerrar sesión?</div>
+      <div id="txtDetalleLogout" style="font-size: 13px; color: var(--md-sys-color-on-surface-variant); margin-bottom: 20px;">Tendrás que volver a iniciar sesión con tu cuenta de Google para acceder a tus gastos.</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <button type="button" class="btn-ver-mas" data-close-modal="modalConfirmarLogout" style="margin:0; background:var(--md-sys-color-surface-container-low); color:var(--md-sys-color-on-surface); border:none;">Cancelar</button>
+        <button type="button" id="btnConfirmarLogoutFinal" class="btn-ver-mas" style="margin:0; background:var(--fin-expense-bg); color:var(--fin-expense); border:none;">Sí, Salir</button>
       </div>
     </div>
   </div>
@@ -527,6 +542,6 @@
   <script src="./config.js"></script>
   <script src="./storage.js?v=3"></script>
   <script src="./api.js?v=3"></script>
-  <script src="./app.js?v=3"></script>
+  <script src="./app.js?v=6"></script>
 </body>
 </html>
