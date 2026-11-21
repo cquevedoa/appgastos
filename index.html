@@ -20,7 +20,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,1,0" rel="stylesheet">
 
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=3">
 
   <!-- Google Identity Services (Sign In With Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -216,18 +216,30 @@
         </div>
 
         <div id="divCat" class="field-group">
-          <label id="lblSubcategoria" for="subcategoria"><span class="material-symbols-rounded">category</span>Categoría / Subcategoría</label>
-          <select id="subcategoria"><option value="">Cargando...</option></select>
+          <label id="lblSubcategoria" for="btnSelectSubcategoria"><span class="material-symbols-rounded">category</span>Categoría / Subcategoría</label>
+          <select id="subcategoria" class="native-select-hidden" tabindex="-1" aria-hidden="true"><option value="">Cargando...</option></select>
+          <button type="button" id="btnSelectSubcategoria" class="custom-select-btn placeholder" data-select-for="subcategoria">
+            <span class="custom-select-text">Cargando...</span>
+            <span class="material-symbols-rounded custom-select-arrow">expand_more</span>
+          </button>
         </div>
 
         <div class="field-group">
-          <label id="lblOrigen" for="medioPago"><span class="material-symbols-rounded">account_balance</span>Medio de Pago</label>
-          <select id="medioPago"><option value="">Cargando...</option></select>
+          <label id="lblOrigen" for="btnSelectMedioPago"><span class="material-symbols-rounded">account_balance</span>Medio de Pago</label>
+          <select id="medioPago" class="native-select-hidden" tabindex="-1" aria-hidden="true"><option value="">Cargando...</option></select>
+          <button type="button" id="btnSelectMedioPago" class="custom-select-btn placeholder" data-select-for="medioPago">
+            <span class="custom-select-text">Cargando...</span>
+            <span class="material-symbols-rounded custom-select-arrow">expand_more</span>
+          </button>
         </div>
 
         <div id="divDestino" class="field-group hidden">
-          <label id="lblDestino" for="cuentaDestino"><span class="material-symbols-rounded">arrow_forward</span>Cuenta Destino</label>
-          <select id="cuentaDestino"></select>
+          <label id="lblDestino" for="btnSelectCuentaDestino"><span class="material-symbols-rounded">arrow_forward</span>Cuenta Destino</label>
+          <select id="cuentaDestino" class="native-select-hidden" tabindex="-1" aria-hidden="true"></select>
+          <button type="button" id="btnSelectCuentaDestino" class="custom-select-btn placeholder" data-select-for="cuentaDestino">
+            <span class="custom-select-text">Selecciona...</span>
+            <span class="material-symbols-rounded custom-select-arrow">expand_more</span>
+          </button>
         </div>
 
         <div id="divCuotas" class="field-group hidden">
@@ -269,10 +281,15 @@
         </div>
 
         <div class="filter-selects">
-          <select id="filterMes" class="filter-select" aria-label="Filtrar por mes">
+          <select id="filterMes" class="native-select-hidden" tabindex="-1" aria-hidden="true">
             <option value="">Todos los meses</option>
           </select>
-          <select id="filterTipo" class="filter-select" aria-label="Filtrar por tipo">
+          <button type="button" id="btnSelectFilterMes" class="filter-select filter-select-btn" data-select-for="filterMes" aria-label="Filtrar por mes">
+            <span class="custom-select-text">Todos los meses</span>
+            <span class="material-symbols-rounded filter-select-arrow">expand_more</span>
+          </button>
+
+          <select id="filterTipo" class="native-select-hidden" tabindex="-1" aria-hidden="true">
             <option value="">Todos los tipos</option>
             <option value="egreso">Egresos</option>
             <option value="ingreso">Ingresos</option>
@@ -282,9 +299,18 @@
             <option value="pago_tdc">Pagos TDC</option>
             <option value="ajuste">Ajustes de saldo</option>
           </select>
-          <select id="filterCuenta" class="filter-select" aria-label="Filtrar por cuenta">
+          <button type="button" id="btnSelectFilterTipo" class="filter-select filter-select-btn" data-select-for="filterTipo" aria-label="Filtrar por tipo">
+            <span class="custom-select-text">Todos los tipos</span>
+            <span class="material-symbols-rounded filter-select-arrow">expand_more</span>
+          </button>
+
+          <select id="filterCuenta" class="native-select-hidden" tabindex="-1" aria-hidden="true">
             <option value="">Todas las cuentas</option>
           </select>
+          <button type="button" id="btnSelectFilterCuenta" class="filter-select filter-select-btn" data-select-for="filterCuenta" aria-label="Filtrar por cuenta">
+            <span class="custom-select-text">Todas las cuentas</span>
+            <span class="material-symbols-rounded filter-select-arrow">expand_more</span>
+          </button>
         </div>
 
         <div id="filterSummary" class="filter-summary hidden">
@@ -403,7 +429,7 @@
   </div>
 
   <!-- MODAL EDITAR SALDO INICIAL -->
-  <div id="modalSaldoInicial" class="modal-overlay">
+  <div id="modalSaldoInicial" class="modal-overlay modal-layer-2">
     <div class="modal-sheet">
       <div class="modal-header">
         <span>Saldo Inicial</span>
@@ -430,7 +456,7 @@
   </div>
 
   <!-- MODAL AJUSTE DE SALDO -->
-  <div id="modalAjusteSaldo" class="modal-overlay">
+  <div id="modalAjusteSaldo" class="modal-overlay modal-layer-2">
     <div class="modal-sheet">
       <div class="modal-header">
         <span>Ajuste de Saldo</span>
@@ -440,8 +466,12 @@
       </div>
       <form id="formAjusteSaldo" novalidate>
         <div class="field-group">
-          <label for="ajusteCuenta"><span class="material-symbols-rounded">account_balance_wallet</span>Cuenta</label>
-          <select id="ajusteCuenta"></select>
+          <label for="btnSelectAjusteCuenta"><span class="material-symbols-rounded">account_balance_wallet</span>Cuenta</label>
+          <select id="ajusteCuenta" class="native-select-hidden" tabindex="-1" aria-hidden="true"></select>
+          <button type="button" id="btnSelectAjusteCuenta" class="custom-select-btn" data-select-for="ajusteCuenta">
+            <span class="custom-select-text">Selecciona...</span>
+            <span class="material-symbols-rounded custom-select-arrow">expand_more</span>
+          </button>
         </div>
 
         <div class="ajuste-info-row">
@@ -472,11 +502,31 @@
     </div>
   </div>
 
+  <!-- BOTTOM-SHEET SELECTOR PERSONALIZADO (CATEGORÍAS, CUENTAS, MEDIOS DE PAGO, FILTROS) -->
+  <div id="modalSelector" class="modal-overlay bottom-sheet modal-layer-3">
+    <div class="modal-sheet picker-sheet">
+      <div class="picker-handle" aria-hidden="true"></div>
+      <div class="modal-header picker-header">
+        <span id="pickerTitle">Seleccionar</span>
+        <button type="button" class="modal-close" data-close-modal="modalSelector" aria-label="Cerrar">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+
+      <div id="pickerSearchWrap" class="search-wrap picker-search-wrap hidden">
+        <span class="material-symbols-rounded search-ico">search</span>
+        <input type="search" id="pickerSearchInput" class="search-input" placeholder="Buscar..." autocomplete="off">
+      </div>
+
+      <div id="pickerOptionsList" class="picker-list"></div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="./config.js"></script>
-  <script src="./storage.js"></script>
-  <script src="./api.js"></script>
-  <script src="./app.js"></script>
+  <script src="./storage.js?v=3"></script>
+  <script src="./api.js?v=3"></script>
+  <script src="./app.js?v=3"></script>
 </body>
 </html>

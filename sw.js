@@ -1,14 +1,14 @@
-const CACHE_VERSION = 'appgastos-pwa-v2';
+const CACHE_VERSION = 'appgastos-pwa-v3';
 const FONT_CACHE = 'appgastos-fonts-v1';
 
 const APP_SHELL_ASSETS = [
   './',
   './index.html',
-  './styles.css',
+  './styles.css?v=3',
   './config.js',
-  './storage.js',
-  './api.js',
-  './app.js',
+  './storage.js?v=3',
+  './api.js?v=3',
+  './app.js?v=3',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -70,11 +70,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App Shell (mismo origen): Network-First para HTML/config (toma cambios rápido),
-  // Cache-First con fallback a red para assets estáticos
+  // App Shell (mismo origen):
+  // Network-First para HTML, CSS, JS y manifest (evita desfasajes entre versiones al desplegar)
+  // Cache-First para íconos/imágenes estáticas
   if (url.origin === self.location.origin) {
-    const isDocument = req.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('config.js');
-    if (isDocument) {
+    const isCodeOrDoc =
+      req.mode === 'navigate' ||
+      url.pathname.endsWith('/') ||
+      url.pathname.endsWith('.html') ||
+      url.pathname.endsWith('.js') ||
+      url.pathname.endsWith('.css') ||
+      url.pathname.endsWith('.json');
+
+    if (isCodeOrDoc) {
       event.respondWith(
         fetch(req)
           .then((res) => {
@@ -84,7 +92,7 @@ self.addEventListener('fetch', (event) => {
             }
             return res;
           })
-          .catch(() => caches.match(req).then((c) => c || caches.match('./index.html')))
+          .catch(() => caches.match(req).then((c) => c || (req.mode === 'navigate' ? caches.match('./index.html') : undefined)))
       );
       return;
     }

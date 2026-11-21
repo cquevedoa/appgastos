@@ -19,6 +19,8 @@
   let sincronizando = false;
   let deferredInstallPrompt = null;
   let gsiInicializado = false;
+  let pickerSelectActivoId = null;
+  let pickerOpcionesCache = [];
 
   const filtros = {
     texto: '',
@@ -50,10 +52,23 @@
 
   function registrarServiceWorker() {
     if ('serviceWorker' in navigator) {
+      const yaTeniaController = Boolean(navigator.serviceWorker.controller);
+      let recargando = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (yaTeniaController && !recargando) {
+          recargando = true;
+          window.location.reload();
+        }
+      });
+
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch((err) => {
-          console.warn('Service Worker no registrado:', err);
-        });
+        navigator.serviceWorker.register('./sw.js')
+          .then((reg) => {
+            try { reg.update(); } catch (_) {}
+          })
+          .catch((err) => {
+            console.warn('Service Worker no registrado:', err);
+          });
       });
     }
   }
@@ -524,6 +539,10 @@
       selCuenta.appendChild(new Option(c, c));
     });
     if (prevCuenta && cuentasSet.has(prevCuenta)) selCuenta.value = prevCuenta;
+
+    sincronizarTextoSelector('filterMes');
+    sincronizarTextoSelector('filterTipo');
+    sincronizarTextoSelector('filterCuenta');
   }
 
   function obtenerMovimientosCombinados() {
@@ -604,6 +623,9 @@
     $('filterMes').classList.toggle('active-filter', Boolean(filtros.mes));
     $('filterTipo').classList.toggle('active-filter', Boolean(filtros.tipo));
     $('filterCuenta').classList.toggle('active-filter', Boolean(filtros.cuenta));
+    $('btnSelectFilterMes').classList.toggle('active-filter', Boolean(filtros.mes));
+    $('btnSelectFilterTipo').classList.toggle('active-filter', Boolean(filtros.tipo));
+    $('btnSelectFilterCuenta').classList.toggle('active-filter', Boolean(filtros.cuenta));
     $('btnClearSearch').classList.toggle('hidden', !filtros.texto);
 
     const hayFiltros = Boolean(textoNorm || filtros.mes || filtros.tipo || filtros.cuenta);
@@ -720,6 +742,7 @@
     sel.innerHTML = '';
     sel.appendChild(new Option(placeholder || 'Selecciona...', ''));
     (lista || []).forEach((i) => sel.appendChild(new Option(i, i)));
+    sincronizarTextoSelector(id);
   }
 
   function llenarSubcategoriasEgreso() {
@@ -736,6 +759,7 @@
       });
       sel.appendChild(g);
     });
+    sincronizarTextoSelector('subcategoria');
   }
 
   function seleccionarCuentaPorDefecto(selectId) {
@@ -744,6 +768,7 @@
     const def = (datos && datos.cuentaDefault) || 'Efectivo';
     const match = Array.from(sel.options).find((o) => o.value.toLowerCase() === def.toLowerCase());
     if (match) sel.value = match.value;
+    sincronizarTextoSelector(selectId);
   }
 
   function setSubtipoTransferencia(subtipo) {
@@ -948,6 +973,7 @@
       $('subcategoria').value = m.titulo || '';
     }
 
+    sincronizarTodosLosSelectores();
     editandoFingerprint = { monto: m.monto, titulo: m.titulo };
 
     $('formTitleText').textContent = 'Editar Operación';
@@ -1356,6 +1382,7 @@
       sel.value = cuentaPreseleccionada;
     }
 
+    sincronizarTextoSelector('ajusteCuenta');
     $('ajusteSaldoReal').value = '';
     $('ajusteDescripcion').value = '';
     actualizarInfoAjusteSaldo();
@@ -1446,10 +1473,265 @@
   }
 
   // ==========================================================================
+  // SELECTORES PERSONALIZADOS (BOTTOM SHEET MATERIAL 3)
+  // ==========================================================================
+
+  const SELECT_BUTTON_MAP = {
+    subcategoria: 'btnSelectSubcategoria',
+    medioPago: 'btnSelectMedioPago',
+    cuentaDestino: 'btnSelectCuentaDestino',
+    ajusteCuenta: 'btnSelectAjusteCuenta',
+    filterMes: 'btnSelectFilterMes',
+    filterTipo: 'btnSelectFilterTipo',
+    filterCuenta: 'btnSelectFilterCuenta'
+  };
+
+  function iconoPorCategoria(catNombre) {
+    const cat = String(catNombre || '').toLowerCase();
+    if (cat.includes('alimento')) return 'restaurant';
+    if (cat.includes('transporte')) return 'directions_bus';
+    if (cat.includes('vivienda')) return 'home';
+    if (cat.includes('servicio')) return 'receipt_long';
+    if (cat.includes('salud')) return 'medical_services';
+    if (cat.includes('ocio')) return 'sports_esports';
+    if (cat.includes('indumentaria')) return 'checkroom';
+    if (cat.includes('educaci')) return 'school';
+    if (cat.includes('divisa')) return 'currency_exchange';
+    return 'category';
+  }
+
+  function iconoPorCuenta(nombreCuenta) {
+    const n = String(nombreCuenta || '').toLowerCase();
+    if (!n) return 'all_inclusive';
+    if (n.includes('tdc') || n.includes('visa') || n.includes('mastercard')) return 'credit_card';
+    if (n === 'efectivo') return 'payments';
+    if (n.includes('mp') || n.includes('mercado')) return 'account_balance_wallet';
+    return 'account_balance';
+  }
+
+  function obtenerTituloSelector(selectId) {
+    const tipo = $('tipoOperacion') ? $('tipoOperacion').value : 'Egreso';
+    if (selectId === 'subcategoria') {
+      return tipo === 'Ingreso' ? 'Concepto de Ingreso' : 'Categoría / Subcategoría';
+    }
+    if (selectId === 'medioPago') {
+      if (tipo === 'Ingreso') return 'Cuenta Destino';
+      if (tipo === 'Transferencia') return 'Cuenta Origen';
+      if (tipo === 'Pago TDC') return 'Cuenta que Paga';
+      return 'Medio de Pago';
+    }
+    if (selectId === 'cuentaDestino') {
+      return tipo === 'Pago TDC' ? 'Tarjeta a Pagar' : 'Cuenta Destino';
+    }
+    if (selectId === 'ajusteCuenta') return 'Seleccionar Cuenta';
+    if (selectId === 'filterMes') return 'Filtrar por Mes';
+    if (selectId === 'filterTipo') return 'Filtrar por Tipo';
+    if (selectId === 'filterCuenta') return 'Filtrar por Cuenta';
+    return 'Seleccionar';
+  }
+
+  function sincronizarTextoSelector(selectId) {
+    const sel = $(selectId);
+    const btnId = SELECT_BUTTON_MAP[selectId];
+    const btn = btnId ? $(btnId) : null;
+    if (!sel || !btn) return;
+
+    const textEl = btn.querySelector('.custom-select-text');
+    const opt = sel.options[sel.selectedIndex];
+    const label = opt ? opt.textContent : 'Selecciona...';
+    const esVacio = !sel.value;
+
+    if (selectId === 'subcategoria' && opt && opt.getAttribute('data-padre') && !esVacio) {
+      textEl.textContent = `${opt.getAttribute('data-padre')} · ${label}`;
+    } else {
+      textEl.textContent = label;
+    }
+
+    if (btn.classList.contains('custom-select-btn')) {
+      btn.classList.toggle('placeholder', esVacio);
+    }
+  }
+
+  function sincronizarTodosLosSelectores() {
+    Object.keys(SELECT_BUTTON_MAP).forEach((id) => sincronizarTextoSelector(id));
+  }
+
+  function esSelectorDeCuentas(selectId) {
+    return selectId === 'medioPago' || selectId === 'cuentaDestino' || selectId === 'ajusteCuenta' || selectId === 'filterCuenta';
+  }
+
+  function abrirSelectorPersonalizado(selectId) {
+    const sel = $(selectId);
+    if (!sel) return;
+
+    pickerSelectActivoId = selectId;
+    $('pickerTitle').textContent = obtenerTituloSelector(selectId);
+
+    const esFiltro = selectId.startsWith('filter');
+    const cuentasMap = new Map(
+      obtenerCuentasConfig().map((c) => [c.cuenta.toLowerCase(), c])
+    );
+
+    const items = [];
+    let optIdxCounter = 0;
+    Array.from(sel.children).forEach((child) => {
+      if (child.tagName === 'OPTGROUP') {
+        const groupLabel = child.label || '';
+        Array.from(child.children).forEach((opt) => {
+          const myIndex = optIdxCounter++;
+          if (!opt.value && !esFiltro) return;
+          items.push({
+            optIndex: myIndex,
+            group: groupLabel,
+            value: opt.value,
+            label: opt.textContent,
+            padre: opt.getAttribute('data-padre') || groupLabel,
+            icon: iconoPorCategoria(groupLabel),
+            saldo: null
+          });
+        });
+      } else if (child.tagName === 'OPTION') {
+        const myIndex = optIdxCounter++;
+        if (!child.value && !esFiltro) return;
+        let icon = 'check_circle';
+        let saldo = null;
+        let sub = '';
+
+        if (esSelectorDeCuentas(selectId)) {
+          icon = iconoPorCuenta(child.value);
+          const cta = cuentasMap.get(String(child.value || '').toLowerCase());
+          if (cta) {
+            saldo = cta.saldo;
+            if (cta.esDefault) sub = 'Cuenta por defecto';
+          }
+        } else if (selectId === 'subcategoria') {
+          icon = 'payments';
+        } else if (selectId === 'filterMes') {
+          icon = child.value ? 'calendar_month' : 'date_range';
+        } else if (selectId === 'filterTipo') {
+          if (child.value === 'egreso') icon = 'shopping_bag';
+          else if (child.value === 'ingreso') icon = 'arrow_downward';
+          else if (child.value === 'transferencia_externa') icon = 'outbound';
+          else if (child.value.startsWith('transferencia')) icon = 'swap_horiz';
+          else if (child.value === 'pago_tdc') icon = 'credit_score';
+          else if (child.value === 'ajuste') icon = 'tune';
+          else icon = 'filter_list';
+        }
+
+        items.push({
+          optIndex: myIndex,
+          group: '',
+          value: child.value,
+          label: child.textContent,
+          padre: '',
+          icon,
+          sub,
+          saldo
+        });
+      }
+    });
+
+    pickerOpcionesCache = items;
+
+    const searchWrap = $('pickerSearchWrap');
+    const searchInput = $('pickerSearchInput');
+    searchInput.value = '';
+    const mostrarBusqueda = items.length > 6;
+    searchWrap.classList.toggle('hidden', !mostrarBusqueda);
+
+    renderOpcionesSelector('');
+    $('modalSelector').classList.add('active');
+  }
+
+  function renderOpcionesSelector(filtroTexto) {
+    const cont = $('pickerOptionsList');
+    const sel = pickerSelectActivoId ? $(pickerSelectActivoId) : null;
+    const idxActual = sel ? sel.selectedIndex : -1;
+    const q = String(filtroTexto || '').trim().toLowerCase();
+
+    const filtrados = q
+      ? pickerOpcionesCache.filter((it) =>
+        `${it.label} ${it.group} ${it.sub || ''}`.toLowerCase().includes(q)
+      )
+      : pickerOpcionesCache;
+
+    if (!filtrados.length) {
+      cont.innerHTML = '<div class="empty-state">No se encontraron opciones.</div>';
+      return;
+    }
+
+    let ultimoGrupo = null;
+    const html = [];
+
+    filtrados.forEach((it) => {
+      if (it.group && it.group !== ultimoGrupo) {
+        ultimoGrupo = it.group;
+        html.push(`
+          <div class="picker-group-label">
+            <span class="material-symbols-rounded">${iconoPorCategoria(it.group)}</span>
+            <span>${escapeHtml(it.group)}</span>
+          </div>
+        `);
+      }
+
+      const seleccionado = (it.optIndex === idxActual);
+      const saldoHtml = (it.saldo !== null && it.saldo !== undefined)
+        ? `<span class="picker-opt-bal${Number(it.saldo) < 0 ? ' neg' : ''}">${formatearMoneda(it.saldo)}</span>`
+        : '';
+
+      html.push(`
+        <button type="button" class="picker-option${seleccionado ? ' selected' : ''}" data-pick-idx="${it.optIndex}">
+          <div class="picker-opt-left">
+            <div class="picker-opt-ico">
+              <span class="material-symbols-rounded">${escapeHtml(it.icon)}</span>
+            </div>
+            <div class="picker-opt-text">
+              <div class="picker-opt-title">${escapeHtml(it.label)}</div>
+              ${it.sub ? `<div class="picker-opt-sub">${escapeHtml(it.sub)}</div>` : ''}
+            </div>
+          </div>
+          <div class="picker-opt-right">
+            ${saldoHtml}
+            ${seleccionado ? '<span class="material-symbols-rounded picker-opt-check">check_circle</span>' : ''}
+          </div>
+        </button>
+      `);
+    });
+
+    cont.innerHTML = html.join('');
+  }
+
+  function seleccionarOpcionPicker(optIndex) {
+    if (!pickerSelectActivoId) return;
+    const sel = $(pickerSelectActivoId);
+    if (sel && optIndex >= 0 && optIndex < sel.options.length) {
+      sel.selectedIndex = optIndex;
+      sincronizarTextoSelector(pickerSelectActivoId);
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    $('modalSelector').classList.remove('active');
+    pickerSelectActivoId = null;
+  }
+
+  // ==========================================================================
   // EVENTOS UI
   // ==========================================================================
 
   function registrarEventosUI() {
+    document.querySelectorAll('[data-select-for]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        abrirSelectorPersonalizado(btn.getAttribute('data-select-for'));
+      });
+    });
+    $('pickerSearchInput').addEventListener('input', (e) => {
+      renderOpcionesSelector(e.target.value);
+    });
+    $('pickerOptionsList').addEventListener('click', (e) => {
+      const optBtn = e.target.closest('.picker-option[data-pick-idx]');
+      if (!optBtn) return;
+      seleccionarOpcionPicker(Number(optBtn.getAttribute('data-pick-idx')));
+    });
+
     $('btnProfileMenu').addEventListener('click', abrirModalPerfil);
     $('btnToggleNuevaCuenta').addEventListener('click', () => {
       const form = $('formNuevaCuenta');
@@ -1562,6 +1844,9 @@
       $('filterMes').value = '';
       $('filterTipo').value = '';
       $('filterCuenta').value = '';
+      sincronizarTextoSelector('filterMes');
+      sincronizarTextoSelector('filterTipo');
+      sincronizarTextoSelector('filterCuenta');
       movimientosVisibles = 15;
       renderMovimientos();
     });
