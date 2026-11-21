@@ -124,6 +124,30 @@ window.AppApi = (() => {
     async deleteTransaction(tipo, rowNum, fingerprint) {
       const res = await post('deleteTransaction', { tipo, rowNum, fingerprint }, true);
       return res;
+    },
+
+    async addAccount(payload) {
+      const res = await post('addAccount', payload, true);
+      if (res.datos) {
+        window.AppStorage.saveCachedData(res.datos);
+      }
+      return res;
+    },
+
+    async updateInitialBalance(payload) {
+      const res = await post('updateInitialBalance', payload, true);
+      if (res.datos) {
+        window.AppStorage.saveCachedData(res.datos);
+      }
+      return res;
+    },
+
+    async adjustBalance(payload) {
+      const res = await post('adjustBalance', payload, true);
+      if (res.datos) {
+        window.AppStorage.saveCachedData(res.datos);
+      }
+      return res;
     }
   };
 })();

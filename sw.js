@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'appgastos-pwa-v1';
+const CACHE_VERSION = 'appgastos-pwa-v2';
 const FONT_CACHE = 'appgastos-fonts-v1';
 
 const APP_SHELL_ASSETS = [

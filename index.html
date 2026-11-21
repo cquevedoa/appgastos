@@ -60,13 +60,18 @@
 
     <!-- TOP BAR -->
     <header class="top-bar">
-      <div class="user-pill">
-        <div id="userAvatar" class="user-avatar">G</div>
+      <button type="button" id="btnProfileMenu" class="user-pill user-pill-btn" title="Cuentas, saldo inicial y ajustes" aria-label="Abrir menú de perfil y cuentas">
+        <div class="avatar-wrap">
+          <div id="userAvatar" class="user-avatar">G</div>
+          <span class="avatar-badge" aria-hidden="true">
+            <span class="material-symbols-rounded">tune</span>
+          </span>
+        </div>
         <div class="user-meta">
           <div class="app-brand">Control Financiero</div>
           <div id="syncSubtext" class="sync-subtext">Sincronizando...</div>
         </div>
-      </div>
+      </button>
 
       <div class="top-actions">
         <button type="button" id="btnSync" class="icon-btn" title="Sincronizar con Google Sheets" aria-label="Sincronizar">
@@ -176,8 +181,25 @@
 
       <form id="mainForm" novalidate>
         <input type="hidden" id="tipoOperacion" value="Egreso">
+        <input type="hidden" id="subtipoTransferencia" value="Interna">
         <input type="hidden" id="editandoTipo" value="">
         <input type="hidden" id="editandoRow" value="">
+
+        <div id="divSubtipoTransf" class="field-group hidden">
+          <label><span class="material-symbols-rounded">sync_alt</span>Tipo de Transferencia</label>
+          <div class="subtipo-nav">
+            <button type="button" class="subtipo-btn active" data-subtipo="Interna">
+              <span class="material-symbols-rounded">swap_horiz</span>
+              <span>Interna</span>
+              <small>Entre tus cuentas</small>
+            </button>
+            <button type="button" class="subtipo-btn" data-subtipo="Externa">
+              <span class="material-symbols-rounded">outbound</span>
+              <span>Externa</span>
+              <small>Hacia un tercero</small>
+            </button>
+          </div>
+        </div>
 
         <div class="field-row">
           <div>
@@ -214,7 +236,7 @@
         </div>
 
         <div class="field-group">
-          <label for="descripcion"><span class="material-symbols-rounded">notes</span>Descripción (opcional)</label>
+          <label id="lblDescripcion" for="descripcion"><span class="material-symbols-rounded">notes</span>Descripción (opcional)</label>
           <input type="text" id="descripcion" placeholder="Ej. Supermercado, cuota, detalle...">
         </div>
 
@@ -254,8 +276,11 @@
             <option value="">Todos los tipos</option>
             <option value="egreso">Egresos</option>
             <option value="ingreso">Ingresos</option>
-            <option value="transferencia">Transferencias</option>
+            <option value="transferencia">Transferencias (todas)</option>
+            <option value="transferencia_interna">Transf. Internas</option>
+            <option value="transferencia_externa">Transf. Externas</option>
             <option value="pago_tdc">Pagos TDC</option>
+            <option value="ajuste">Ajustes de saldo</option>
           </select>
           <select id="filterCuenta" class="filter-select" aria-label="Filtrar por cuenta">
             <option value="">Todas las cuentas</option>
@@ -313,6 +338,137 @@
         <button type="button" class="btn-ver-mas" data-close-modal="modalConfirmarBorrar" style="margin:0; background:var(--md-sys-color-surface-container-low); color:var(--md-sys-color-on-surface); border:none;">Cancelar</button>
         <button type="button" id="btnConfirmarBorrarFinal" class="btn-ver-mas" style="margin:0; background:var(--fin-expense-bg); color:var(--fin-expense); border:none;">Sí, Borrar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL PERFIL: GESTIÓN DE CUENTAS, SALDOS INICIALES Y AJUSTES -->
+  <div id="modalPerfil" class="modal-overlay">
+    <div class="modal-sheet modal-sheet-lg">
+      <div class="modal-header">
+        <div class="profile-modal-user">
+          <div id="perfilAvatar" class="user-avatar">G</div>
+          <div class="profile-modal-meta">
+            <div id="perfilNombre" class="profile-modal-name">Usuario</div>
+            <div id="perfilEmail" class="profile-modal-email"></div>
+          </div>
+        </div>
+        <button type="button" class="modal-close" data-close-modal="modalPerfil" aria-label="Cerrar">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+
+      <div id="perfilTagInfo" class="profile-tag-pill hidden"></div>
+
+      <div class="profile-actions-bar">
+        <button type="button" id="btnToggleNuevaCuenta" class="profile-action-btn primary">
+          <span class="material-symbols-rounded">add_card</span>
+          <span>Nueva cuenta</span>
+        </button>
+        <button type="button" id="btnAbrirAjusteRapido" class="profile-action-btn secondary">
+          <span class="material-symbols-rounded">tune</span>
+          <span>Ajustar saldo</span>
+        </button>
+      </div>
+
+      <!-- Formulario colapsable para crear nueva cuenta -->
+      <form id="formNuevaCuenta" class="subpanel-card hidden" novalidate>
+        <div class="subpanel-title">Agregar cuenta nueva</div>
+        <div class="field-group">
+          <label for="nuevaCuentaNombre"><span class="material-symbols-rounded">account_balance</span>Nombre de la cuenta</label>
+          <input type="text" id="nuevaCuentaNombre" placeholder="Ej. Cuenta 1, Naranja X..." autocomplete="off">
+          <div id="previewNombreCuenta" class="field-hint hidden"></div>
+        </div>
+        <div class="field-group">
+          <label for="nuevaCuentaSaldo"><span class="material-symbols-rounded">attach_money</span>Saldo inicial</label>
+          <div class="monto-wrapper">
+            <span class="monto-prefix">$</span>
+            <input type="text" class="monto monto-sm" id="nuevaCuentaSaldo" inputmode="decimal" autocomplete="off" placeholder="0" value="0">
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button type="button" id="btnCancelarNuevaCuenta" class="btn-modal-secondary">Cancelar</button>
+          <button type="submit" id="btnGuardarNuevaCuenta" class="btn-modal-primary">Crear cuenta</button>
+        </div>
+      </form>
+
+      <div class="accounts-section-header">
+        <span>Cuentas configuradas</span>
+        <span id="lblCantidadCuentas" class="accounts-count"></span>
+      </div>
+
+      <div id="listaCuentasPerfil" class="accounts-list">
+        <div class="empty-state">Cargando cuentas...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL EDITAR SALDO INICIAL -->
+  <div id="modalSaldoInicial" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <span>Saldo Inicial</span>
+        <button type="button" class="modal-close" data-close-modal="modalSaldoInicial" aria-label="Cerrar">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+      <form id="formSaldoInicial" novalidate>
+        <input type="hidden" id="editSaldoInicialCuenta" value="">
+        <div id="lblCuentaSaldoInicial" class="modal-subtitle"></div>
+        <div class="field-group">
+          <label for="inputSaldoInicial"><span class="material-symbols-rounded">savings</span>Nuevo saldo inicial</label>
+          <div class="monto-wrapper">
+            <span class="monto-prefix">$</span>
+            <input type="text" class="monto monto-sm" id="inputSaldoInicial" inputmode="decimal" autocomplete="off" placeholder="0">
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px;">
+          <button type="button" class="btn-modal-secondary" data-close-modal="modalSaldoInicial">Cancelar</button>
+          <button type="submit" id="btnGuardarSaldoInicial" class="btn-modal-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL AJUSTE DE SALDO -->
+  <div id="modalAjusteSaldo" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <span>Ajuste de Saldo</span>
+        <button type="button" class="modal-close" data-close-modal="modalAjusteSaldo" aria-label="Cerrar">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+      <form id="formAjusteSaldo" novalidate>
+        <div class="field-group">
+          <label for="ajusteCuenta"><span class="material-symbols-rounded">account_balance_wallet</span>Cuenta</label>
+          <select id="ajusteCuenta"></select>
+        </div>
+
+        <div class="ajuste-info-row">
+          <span>Saldo actual en app</span>
+          <strong id="ajusteSaldoActualVal">$ 0</strong>
+        </div>
+
+        <div class="field-group">
+          <label for="ajusteSaldoReal"><span class="material-symbols-rounded">calculate</span>Saldo real actual</label>
+          <div class="monto-wrapper">
+            <span class="monto-prefix">$</span>
+            <input type="text" class="monto monto-sm" id="ajusteSaldoReal" inputmode="decimal" autocomplete="off" placeholder="0">
+          </div>
+        </div>
+
+        <div id="ajusteDiffPreview" class="ajuste-diff hidden"></div>
+
+        <div class="field-group">
+          <label for="ajusteDescripcion"><span class="material-symbols-rounded">notes</span>Motivo (opcional)</label>
+          <input type="text" id="ajusteDescripcion" placeholder="Ej. Arqueo, redondeo, diferencia...">
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+          <button type="button" class="btn-modal-secondary" data-close-modal="modalAjusteSaldo">Cancelar</button>
+          <button type="submit" id="btnAplicarAjuste" class="btn-modal-primary">Aplicar ajuste</button>
+        </div>
+      </form>
     </div>
   </div>
 

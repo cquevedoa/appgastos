@@ -8,6 +8,7 @@
 
   // Estado en memoria
   let datos = null;
+  let usuarioActual = null;
   let lastSyncAt = null;
   let oculto = false;
   let themeMode = 'auto'; // 'auto' | 'dark' | 'light'
@@ -185,6 +186,7 @@
   function renderUsuario(user) {
     const avatar = $('userAvatar');
     if (!user) return;
+    usuarioActual = user;
     if (user.picture) {
       avatar.innerHTML = `<img src="${escapeHtml(user.picture)}" alt="${escapeHtml(user.name || '')}" referrerpolicy="no-referrer">`;
     } else {
@@ -259,6 +261,7 @@
     window.AppStorage.clearSession();
     window.AppStorage.clearCachedData();
     datos = null;
+    usuarioActual = null;
     lastSyncAt = null;
     if (window.google && window.google.accounts && window.google.accounts.id) {
       try { window.google.accounts.id.disableAutoSelect(); } catch (_) {}
@@ -536,8 +539,9 @@
       else if (p.tipoOperacion === 'Transferencia') tipo = 'transferencia';
       else if (p.tipoOperacion === 'Pago TDC') tipo = 'pago_tdc';
 
+      const subtipoTransf = tipo === 'transferencia' ? (p.subtipoTransferencia || 'Interna') : '';
       const titulo = tipo === 'transferencia'
-        ? 'Salida'
+        ? (subtipoTransf === 'Externa' ? 'Transferencia Externa' : 'Transferencia Interna')
         : (tipo === 'pago_tdc' ? (p.cuentaDestino || 'Pago TDC') : (p.subcategoria || p.tipoOperacion));
 
       const subtitulo = tipo === 'ingreso'
@@ -554,6 +558,8 @@
         anio: d.getFullYear(),
         rowNum: -1,
         tipo,
+        subtipoTransferencia: subtipoTransf,
+        ajusteDireccion: '',
         titulo,
         subtitulo,
         cuenta: p.medioPago || '',
@@ -573,7 +579,15 @@
     const textoNorm = filtros.texto.trim().toLowerCase();
     const filtrados = todos.filter((m) => {
       if (filtros.mes && (m.mes || '').toLowerCase() !== filtros.mes) return false;
-      if (filtros.tipo && m.tipo !== filtros.tipo) return false;
+      if (filtros.tipo) {
+        if (filtros.tipo === 'transferencia_interna') {
+          if (m.tipo !== 'transferencia' || (m.subtipoTransferencia || 'Interna') !== 'Interna') return false;
+        } else if (filtros.tipo === 'transferencia_externa') {
+          if (m.tipo !== 'transferencia' || m.subtipoTransferencia !== 'Externa') return false;
+        } else if (m.tipo !== filtros.tipo) {
+          return false;
+        }
+      }
       if (filtros.cuenta && m.cuenta !== filtros.cuenta) return false;
       if (textoNorm) {
         const haystack = [
@@ -596,7 +610,7 @@
     const summaryEl = $('filterSummary');
     if (hayFiltros) {
       const totalEgr = filtrados
-        .filter((m) => m.tipo === 'egreso')
+        .filter((m) => m.tipo === 'egreso' || (m.tipo === 'transferencia' && m.subtipoTransferencia === 'Externa'))
         .reduce((acc, m) => acc + (Number(m.monto) || 0), 0);
       const totalIng = filtrados
         .filter((m) => m.tipo === 'ingreso')
@@ -624,17 +638,28 @@
     $('lblContadorMovs').textContent = `Mostrando ${slice.length} de ${filtrados.length}`;
 
     cont.innerHTML = slice.map((m, idx) => {
-      const signo = m.tipo === 'ingreso' ? '+' : (m.tipo === 'transferencia' ? '' : '-');
+      const esTransfExterna = (m.tipo === 'transferencia' && m.subtipoTransferencia === 'Externa');
+      const cssTipo = esTransfExterna ? 'transferencia_externa' : m.tipo;
+      let signo = '-';
+      if (m.tipo === 'ingreso') signo = '+';
+      else if (m.tipo === 'transferencia') signo = esTransfExterna ? '-' : '';
+      else if (m.tipo === 'ajuste') signo = m.ajusteDireccion === 'positivo' ? '+' : '-';
+
       const detalleSecundario = [m.cuenta, m.descripcion].filter(Boolean).join(' · ');
-      const subLabel = m.tipo === 'pago_tdc'
-        ? `Pago TDC · ${m.cuenta || 'Cuenta'}`
-        : (m.tipo === 'transferencia'
-          ? `Transferencia · ${detalleSecundario}`
-          : `${m.subtitulo}${detalleSecundario ? ' · ' + detalleSecundario : ''}`);
+      let subLabel;
+      if (m.tipo === 'pago_tdc') {
+        subLabel = `Pago TDC · ${m.cuenta || 'Cuenta'}`;
+      } else if (m.tipo === 'transferencia') {
+        subLabel = `${esTransfExterna ? 'Transf. Externa' : 'Transf. Interna'}${detalleSecundario ? ' · ' + detalleSecundario : ''}`;
+      } else if (m.tipo === 'ajuste') {
+        subLabel = `Ajuste de saldo${detalleSecundario ? ' · ' + detalleSecundario : ''}`;
+      } else {
+        subLabel = `${m.subtitulo}${detalleSecundario ? ' · ' + detalleSecundario : ''}`;
+      }
 
       return `
         <div class="mov-item${m.pending ? ' pending-item' : ''}" data-mov-idx="${idx}">
-          <div class="mov-icon ${m.tipo}">
+          <div class="mov-icon ${cssTipo}">
             <span class="material-symbols-rounded">${iconoMovimiento(m)}</span>
           </div>
           <div class="mov-body">
@@ -645,7 +670,7 @@
             <div class="mov-meta">${escapeHtml(subLabel)}</div>
           </div>
           <div class="mov-right">
-            <div class="mov-amount ${m.tipo}">${signo}${formatearMoneda(m.monto)}</div>
+            <div class="mov-amount ${cssTipo}">${signo}${formatearMoneda(m.monto)}</div>
             <div class="mov-date">${escapeHtml(m.fechaStr)}</div>
           </div>
         </div>
@@ -663,8 +688,9 @@
 
   function iconoMovimiento(mov) {
     if (mov.tipo === 'ingreso') return 'arrow_downward';
-    if (mov.tipo === 'transferencia') return 'swap_horiz';
+    if (mov.tipo === 'transferencia') return mov.subtipoTransferencia === 'Externa' ? 'outbound' : 'swap_horiz';
     if (mov.tipo === 'pago_tdc') return 'credit_score';
+    if (mov.tipo === 'ajuste') return 'tune';
     const cat = (mov.subtitulo || '').toLowerCase();
     if (cat.includes('alimento')) return 'restaurant';
     if (cat.includes('transporte')) return 'directions_bus';
@@ -712,6 +738,33 @@
     });
   }
 
+  function seleccionarCuentaPorDefecto(selectId) {
+    const sel = $(selectId);
+    if (!sel) return;
+    const def = (datos && datos.cuentaDefault) || 'Efectivo';
+    const match = Array.from(sel.options).find((o) => o.value.toLowerCase() === def.toLowerCase());
+    if (match) sel.value = match.value;
+  }
+
+  function setSubtipoTransferencia(subtipo) {
+    const val = (String(subtipo || 'Interna').toLowerCase().includes('externa')) ? 'Externa' : 'Interna';
+    $('subtipoTransferencia').value = val;
+    document.querySelectorAll('.subtipo-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.subtipo === val);
+    });
+
+    if ($('tipoOperacion').value === 'Transferencia') {
+      const esExterna = (val === 'Externa');
+      $('divDestino').classList.toggle('hidden', esExterna);
+      $('lblDescripcion').innerHTML = esExterna
+        ? '<span class="material-symbols-rounded">person</span> Destinatario / Descripción'
+        : '<span class="material-symbols-rounded">notes</span> Descripción (opcional)';
+      $('descripcion').placeholder = esExterna
+        ? 'Ej. Alquiler, Juan, servicio...'
+        : 'Ej. Ahorro, pago compartido, detalle...';
+    }
+  }
+
   function setTipo(tipo) {
     if (!datos) return;
     $('tipoOperacion').value = tipo;
@@ -720,8 +773,13 @@
     });
 
     const usaCategoria = (tipo === 'Egreso' || tipo === 'Ingreso');
+    const esTransf = (tipo === 'Transferencia');
     $('divCat').classList.toggle('hidden', !usaCategoria);
+    $('divSubtipoTransf').classList.toggle('hidden', !esTransf);
     $('divDestino').classList.toggle('hidden', usaCategoria);
+
+    $('lblDescripcion').innerHTML = '<span class="material-symbols-rounded">notes</span> Descripción (opcional)';
+    $('descripcion').placeholder = 'Ej. Supermercado, cuota, detalle...';
 
     if (tipo === 'Egreso') {
       $('lblSubcategoria').innerHTML = '<span class="material-symbols-rounded">category</span> Categoría / Subcategoría';
@@ -738,11 +796,16 @@
       $('lblDestino').innerHTML = '<span class="material-symbols-rounded">input</span> Cuenta Destino';
       llenarSelect('medioPago', datos.cuentasNoTdc);
       llenarSelect('cuentaDestino', datos.cuentasNoTdc);
+      setSubtipoTransferencia($('subtipoTransferencia').value || 'Interna');
     } else if (tipo === 'Pago TDC') {
       $('lblOrigen').innerHTML = '<span class="material-symbols-rounded">account_balance</span> Cuenta que Paga';
       $('lblDestino').innerHTML = '<span class="material-symbols-rounded">credit_card</span> Tarjeta a Pagar';
       llenarSelect('medioPago', datos.cuentasNoTdc);
       llenarSelect('cuentaDestino', datos.tdcs);
+    }
+
+    if (!$('editandoRow').value) {
+      seleccionarCuentaPorDefecto('medioPago');
     }
     actualizarCuotas();
   }
@@ -762,9 +825,37 @@
       : p[0];
   }
 
+  function mascaraMontoConSigno(input) {
+    const raw = String(input.value || '');
+    const esNeg = raw.trim().startsWith('-');
+    let v = raw.replace(/[^\d,]/g, '');
+    const p = v.split(',');
+    p[0] = p[0].replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const cuerpo = p.length > 1
+      ? (p[0] === '' ? '0' : p[0]) + ',' + p.slice(1).join('').substring(0, 2)
+      : p[0];
+    input.value = (esNeg ? '-' : '') + cuerpo;
+  }
+
+  function parsearMontoConSigno(str) {
+    const s = String(str === undefined || str === null ? '' : str).trim();
+    if (!s || s === '-') return NaN;
+    return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  }
+
+  function formatearNumeroInput(num) {
+    const n = Number(num) || 0;
+    const neg = n < 0 ? '-' : '';
+    const absStr = Math.abs(n).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    const [ent, dec] = absStr.split('.');
+    const entFmt = ent.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return neg + entFmt + (dec ? ',' + dec : '');
+  }
+
   function limpiarFormularioEdicion() {
     $('editandoTipo').value = '';
     $('editandoRow').value = '';
+    $('subtipoTransferencia').value = 'Interna';
     editandoFingerprint = null;
     $('formTitleText').textContent = 'Registrar Operación';
     $('formTitleIcon').textContent = 'add_circle';
@@ -784,6 +875,9 @@
     if (mov.pending) {
       $('btnEditarMov').classList.add('hidden');
       $('lblBtnBorrarMov').textContent = 'Cancelar operación pendiente';
+    } else if (mov.tipo === 'ajuste') {
+      $('btnEditarMov').classList.add('hidden');
+      $('lblBtnBorrarMov').textContent = 'Borrar Ajuste';
     } else {
       $('btnEditarMov').classList.remove('hidden');
       $('lblBtnBorrarMov').textContent = 'Borrar Movimiento';
@@ -795,6 +889,11 @@
   function ejecutarEditarMovimiento() {
     if (!movimientoSeleccionado) return;
     $('modalAcciones').classList.remove('active');
+
+    if (movimientoSeleccionado.tipo === 'ajuste') {
+      mostrarToast('Los ajustes se borran o se crean nuevos desde el menú de perfil.', 'warn');
+      return;
+    }
 
     if (!navigator.onLine) {
       mostrarToast('Necesitás conexión para editar un movimiento ya sincronizado.', 'warn');
@@ -808,6 +907,12 @@
     if (m.tipo === 'ingreso') tipoOpUI = 'Ingreso';
     else if (m.tipo === 'transferencia') tipoOpUI = 'Transferencia';
     else if (m.tipo === 'pago_tdc') tipoOpUI = 'Pago TDC';
+
+    $('editandoTipo').value = m.tipo;
+    $('editandoRow').value = m.rowNum;
+    if (tipoOpUI === 'Transferencia') {
+      $('subtipoTransferencia').value = m.subtipoTransferencia || 'Interna';
+    }
 
     setTipo(tipoOpUI);
 
@@ -824,12 +929,15 @@
         descLimpia = descLimpia.slice(prefijo.length).trim();
       }
     } else if (tipoOpUI === 'Transferencia') {
-      // Intentar extraer cuenta destino de "A: <Cuenta> <desc>"
-      const cuentas = (datos && datos.cuentasNoTdc) || [];
-      const matchCuenta = cuentas.find((c) => descLimpia.startsWith('A: ' + c));
-      if (matchCuenta) {
-        $('cuentaDestino').value = matchCuenta;
-        descLimpia = descLimpia.slice(('A: ' + matchCuenta).length).trim();
+      const subtipo = m.subtipoTransferencia || 'Interna';
+      setSubtipoTransferencia(subtipo);
+      if (subtipo === 'Interna') {
+        const cuentas = (datos && datos.cuentasNoTdc) || [];
+        const matchCuenta = cuentas.find((c) => descLimpia.startsWith('A: ' + c));
+        if (matchCuenta) {
+          $('cuentaDestino').value = matchCuenta;
+          descLimpia = descLimpia.slice(('A: ' + matchCuenta).length).trim();
+        }
       }
     }
 
@@ -840,8 +948,6 @@
       $('subcategoria').value = m.titulo || '';
     }
 
-    $('editandoTipo').value = m.tipo;
-    $('editandoRow').value = m.rowNum;
     editandoFingerprint = { monto: m.monto, titulo: m.titulo };
 
     $('formTitleText').textContent = 'Editar Operación';
@@ -933,11 +1039,15 @@
       mostrarMensajeForm('Elegí la cuenta / medio de pago.', 'error');
       return;
     }
-    if ((tipo === 'Transferencia' || tipo === 'Pago TDC') && !$('cuentaDestino').value) {
+
+    const subtipoTransf = (tipo === 'Transferencia') ? ($('subtipoTransferencia').value || 'Interna') : '';
+    const esTransfInterna = (tipo === 'Transferencia' && subtipoTransf === 'Interna');
+
+    if ((esTransfInterna || tipo === 'Pago TDC') && !$('cuentaDestino').value) {
       mostrarMensajeForm(tipo === 'Pago TDC' ? 'Elegí la tarjeta a pagar.' : 'Elegí la cuenta destino.', 'error');
       return;
     }
-    if (tipo === 'Transferencia' && $('cuentaDestino').value === $('medioPago').value) {
+    if (esTransfInterna && $('cuentaDestino').value === $('medioPago').value) {
       mostrarMensajeForm('La cuenta origen y destino no pueden ser la misma.', 'error');
       return;
     }
@@ -951,15 +1061,17 @@
     const selSub = $('subcategoria');
     const opt = selSub.options[selSub.selectedIndex];
     const usaCategoria = (tipo === 'Egreso' || tipo === 'Ingreso');
+    const usaDestino = (esTransfInterna || tipo === 'Pago TDC');
 
     const payload = {
       clientId: generarClientId(),
       tipoOperacion: tipo,
+      subtipoTransferencia: subtipoTransf,
       fecha: $('fecha').value,
       subcategoria: usaCategoria ? selSub.value : '',
       categoriaPadre: (tipo === 'Egreso' && opt) ? (opt.getAttribute('data-padre') || '') : '',
       medioPago: $('medioPago').value,
-      cuentaDestino: usaCategoria ? '' : $('cuentaDestino').value,
+      cuentaDestino: usaDestino ? $('cuentaDestino').value : '',
       monto: $('monto').value,
       cuotas: $('cuotas').value,
       descripcion: $('descripcion').value,
@@ -1027,10 +1139,356 @@
   }
 
   // ==========================================================================
+  // MENÚ DE PERFIL: CUENTAS, SALDO INICIAL Y AJUSTE DE SALDO
+  // ==========================================================================
+
+  function obtenerSufijoUsuario() {
+    const email = ((usuarioActual && usuarioActual.email) || '').toLowerCase();
+    if (email.includes('roislenabreu')) return '(Rois)';
+    if (email.includes('cquevedoarteaga')) return '(Carlos)';
+    return '';
+  }
+
+  function previsualizarNombreCuenta(nombreBase) {
+    const limpio = String(nombreBase || '').trim().replace(/\s+/g, ' ');
+    if (!limpio) return '';
+    if (limpio.toLowerCase() === 'efectivo') return 'Efectivo';
+    const sufijo = obtenerSufijoUsuario();
+    if (!sufijo) return limpio;
+    if (limpio.toLowerCase().endsWith(sufijo.toLowerCase())) return limpio;
+    return `${limpio} ${sufijo}`;
+  }
+
+  function obtenerCuentasConfig() {
+    if (datos && datos.dashboard && Array.isArray(datos.dashboard.cuentasConfig)) {
+      return datos.dashboard.cuentasConfig;
+    }
+    return ((datos && datos.cuentasNoTdc) || []).map((nombre) => ({
+      cuenta: nombre,
+      saldoInicial: 0,
+      saldo: 0,
+      esDefault: nombre.toLowerCase() === 'efectivo'
+    }));
+  }
+
+  function abrirModalPerfil() {
+    const user = usuarioActual || (window.AppStorage.getSession() && window.AppStorage.getSession().user);
+    if (user) {
+      const av = $('perfilAvatar');
+      if (user.picture) {
+        av.innerHTML = `<img src="${escapeHtml(user.picture)}" alt="${escapeHtml(user.name || '')}" referrerpolicy="no-referrer">`;
+      } else {
+        av.textContent = (user.name || user.email || 'U').charAt(0).toUpperCase();
+      }
+      $('perfilNombre').textContent = user.name || user.email || 'Usuario';
+      $('perfilEmail').textContent = user.email || '';
+    }
+
+    const sufijo = obtenerSufijoUsuario();
+    const tagEl = $('perfilTagInfo');
+    if (sufijo) {
+      tagEl.textContent = `Las nuevas cuentas que agregues llevarán automáticamente ${sufijo} (salvo Efectivo).`;
+      tagEl.classList.remove('hidden');
+    } else {
+      tagEl.classList.add('hidden');
+    }
+
+    $('formNuevaCuenta').classList.add('hidden');
+    renderListaCuentasPerfil();
+    $('modalPerfil').classList.add('active');
+  }
+
+  function renderListaCuentasPerfil() {
+    const cont = $('listaCuentasPerfil');
+    const cuentas = obtenerCuentasConfig();
+    $('lblCantidadCuentas').textContent = `${cuentas.length} cuenta${cuentas.length === 1 ? '' : 's'}`;
+
+    if (!cuentas.length) {
+      cont.innerHTML = '<div class="empty-state">No hay cuentas configuradas todavía.</div>';
+      return;
+    }
+
+    cont.innerHTML = cuentas.map((c) => {
+      const esNeg = (Number(c.saldo) || 0) < 0;
+      return `
+        <div class="account-card">
+          <div class="account-card-top">
+            <div class="account-name-wrap">
+              <span class="account-name">${escapeHtml(c.cuenta)}</span>
+              ${c.esDefault ? '<span class="badge-default">Por defecto</span>' : ''}
+            </div>
+            <span class="account-balance${esNeg ? ' negative' : ''}">${formatearMoneda(c.saldo)}</span>
+          </div>
+          <div class="account-card-bottom">
+            <span class="account-init-meta">Inicial: ${formatearMoneda(c.saldoInicial)}</span>
+            <div class="account-card-btns">
+              <button type="button" class="mini-pill-btn" data-edit-init="${escapeHtml(c.cuenta)}">
+                <span class="material-symbols-rounded">edit</span> Inicial
+              </button>
+              <button type="button" class="mini-pill-btn warn" data-adjust-acc="${escapeHtml(c.cuenta)}">
+                <span class="material-symbols-rounded">tune</span> Ajustar
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function actualizarPreviewNombreCuenta() {
+    const val = $('nuevaCuentaNombre').value;
+    const prev = previsualizarNombreCuenta(val);
+    const hint = $('previewNombreCuenta');
+    if (prev) {
+      hint.textContent = `Se guardará como: ${prev}`;
+      hint.classList.remove('hidden');
+    } else {
+      hint.classList.add('hidden');
+    }
+  }
+
+  async function manejarSubmitNuevaCuenta(e) {
+    e.preventDefault();
+    if (!navigator.onLine) {
+      mostrarToast('Necesitás conexión para agregar una cuenta.', 'warn');
+      return;
+    }
+
+    const nombre = $('nuevaCuentaNombre').value.trim();
+    if (!nombre) {
+      mostrarToast('Ingresá el nombre de la cuenta.', 'error');
+      return;
+    }
+    const saldoStr = $('nuevaCuentaSaldo').value.trim() || '0';
+    const saldoNum = parsearMontoConSigno(saldoStr);
+    if (!isFinite(saldoNum)) {
+      mostrarToast('Ingresá un saldo inicial válido.', 'error');
+      return;
+    }
+
+    const btn = $('btnGuardarNuevaCuenta');
+    btn.disabled = true;
+    btn.textContent = 'Creando...';
+
+    try {
+      const res = await window.AppApi.addAccount({ nombre, saldoInicial: saldoStr });
+      mostrarToast(res.message || 'Cuenta creada.', 'success');
+      $('nuevaCuentaNombre').value = '';
+      $('nuevaCuentaSaldo').value = '0';
+      $('previewNombreCuenta').classList.add('hidden');
+      $('formNuevaCuenta').classList.add('hidden');
+      if (res.datos) {
+        lastSyncAt = Date.now();
+        aplicarDatos(res.datos);
+        actualizarTextoSync();
+      }
+      renderListaCuentasPerfil();
+    } catch (err) {
+      if (manejarErrorAuth(err)) return;
+      mostrarToast(err.message || 'No se pudo crear la cuenta.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Crear cuenta';
+    }
+  }
+
+  function abrirModalSaldoInicial(cuentaNombre) {
+    const cuentas = obtenerCuentasConfig();
+    const cta = cuentas.find((c) => c.cuenta === cuentaNombre);
+    if (!cta) return;
+
+    $('editSaldoInicialCuenta').value = cta.cuenta;
+    $('lblCuentaSaldoInicial').textContent = `Cuenta: ${cta.cuenta}`;
+    $('inputSaldoInicial').value = formatearNumeroInput(cta.saldoInicial || 0);
+    $('modalSaldoInicial').classList.add('active');
+    setTimeout(() => $('inputSaldoInicial').focus(), 120);
+  }
+
+  async function manejarSubmitSaldoInicial(e) {
+    e.preventDefault();
+    if (!navigator.onLine) {
+      mostrarToast('Necesitás conexión para actualizar el saldo inicial.', 'warn');
+      return;
+    }
+
+    const cuenta = $('editSaldoInicialCuenta').value;
+    const saldoStr = $('inputSaldoInicial').value.trim() || '0';
+    const saldoNum = parsearMontoConSigno(saldoStr);
+    if (!isFinite(saldoNum)) {
+      mostrarToast('Ingresá un monto válido.', 'error');
+      return;
+    }
+
+    const btn = $('btnGuardarSaldoInicial');
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+
+    try {
+      const res = await window.AppApi.updateInitialBalance({ cuenta, saldoInicial: saldoStr });
+      mostrarToast(res.message || 'Saldo inicial actualizado.', 'success');
+      $('modalSaldoInicial').classList.remove('active');
+      if (res.datos) {
+        lastSyncAt = Date.now();
+        aplicarDatos(res.datos);
+        actualizarTextoSync();
+      }
+      renderListaCuentasPerfil();
+    } catch (err) {
+      if (manejarErrorAuth(err)) return;
+      mostrarToast(err.message || 'No se pudo actualizar el saldo inicial.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Guardar';
+    }
+  }
+
+  function abrirModalAjusteSaldo(cuentaPreseleccionada) {
+    const cuentas = obtenerCuentasConfig();
+    if (!cuentas.length) {
+      mostrarToast('Primero agregá una cuenta.', 'warn');
+      return;
+    }
+
+    const sel = $('ajusteCuenta');
+    sel.innerHTML = '';
+    cuentas.forEach((c) => sel.appendChild(new Option(c.cuenta, c.cuenta)));
+    if (cuentaPreseleccionada && cuentas.some((c) => c.cuenta === cuentaPreseleccionada)) {
+      sel.value = cuentaPreseleccionada;
+    }
+
+    $('ajusteSaldoReal').value = '';
+    $('ajusteDescripcion').value = '';
+    actualizarInfoAjusteSaldo();
+    $('modalAjusteSaldo').classList.add('active');
+    setTimeout(() => $('ajusteSaldoReal').focus(), 120);
+  }
+
+  function actualizarInfoAjusteSaldo() {
+    const cuenta = $('ajusteCuenta').value;
+    const cta = obtenerCuentasConfig().find((c) => c.cuenta === cuenta);
+    const saldoActual = cta ? (Number(cta.saldo) || 0) : 0;
+    $('ajusteSaldoActualVal').textContent = formatearMoneda(saldoActual);
+    actualizarPreviewAjuste();
+  }
+
+  function actualizarPreviewAjuste() {
+    const prevEl = $('ajusteDiffPreview');
+    const cuenta = $('ajusteCuenta').value;
+    const cta = obtenerCuentasConfig().find((c) => c.cuenta === cuenta);
+    const saldoActual = cta ? (Number(cta.saldo) || 0) : 0;
+    const raw = $('ajusteSaldoReal').value.trim();
+
+    if (!raw || raw === '-') {
+      prevEl.classList.add('hidden');
+      return;
+    }
+    const saldoReal = parsearMontoConSigno(raw);
+    if (!isFinite(saldoReal)) {
+      prevEl.classList.add('hidden');
+      return;
+    }
+
+    const diff = Math.round((saldoReal - saldoActual) * 100) / 100;
+    prevEl.classList.remove('hidden', 'pos', 'neg', 'zero');
+    if (Math.abs(diff) < 0.01) {
+      prevEl.classList.add('zero');
+      prevEl.textContent = 'El saldo ya coincide, no hace falta registrar ajuste.';
+    } else if (diff > 0) {
+      prevEl.classList.add('pos');
+      prevEl.textContent = `Ajuste positivo: +${formatearMoneda(diff)} (se registra en Ingresos, excluido del resumen mensual).`;
+    } else {
+      prevEl.classList.add('neg');
+      prevEl.textContent = `Ajuste negativo: -${formatearMoneda(Math.abs(diff))} (se registra en Egresos, excluido del resumen mensual).`;
+    }
+  }
+
+  async function manejarSubmitAjusteSaldo(e) {
+    e.preventDefault();
+    if (!navigator.onLine) {
+      mostrarToast('Necesitás conexión para realizar un ajuste de saldo.', 'warn');
+      return;
+    }
+
+    const cuenta = $('ajusteCuenta').value;
+    const saldoRealStr = $('ajusteSaldoReal').value.trim();
+    const saldoReal = parsearMontoConSigno(saldoRealStr);
+    if (!cuenta || !isFinite(saldoReal)) {
+      mostrarToast('Ingresá el saldo real actual de la cuenta.', 'error');
+      return;
+    }
+
+    const btn = $('btnAplicarAjuste');
+    btn.disabled = true;
+    btn.textContent = 'Aplicando...';
+
+    try {
+      const res = await window.AppApi.adjustBalance({
+        cuenta,
+        saldoReal: saldoRealStr,
+        descripcion: $('ajusteDescripcion').value.trim(),
+        fecha: hoyLocal()
+      });
+      mostrarToast(res.message || 'Saldo ajustado.', 'success');
+      $('modalAjusteSaldo').classList.remove('active');
+      if (res.datos) {
+        lastSyncAt = Date.now();
+        aplicarDatos(res.datos);
+        actualizarTextoSync();
+      }
+      renderListaCuentasPerfil();
+    } catch (err) {
+      if (manejarErrorAuth(err)) return;
+      mostrarToast(err.message || 'No se pudo aplicar el ajuste.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Aplicar ajuste';
+    }
+  }
+
+  // ==========================================================================
   // EVENTOS UI
   // ==========================================================================
 
   function registrarEventosUI() {
+    $('btnProfileMenu').addEventListener('click', abrirModalPerfil);
+    $('btnToggleNuevaCuenta').addEventListener('click', () => {
+      const form = $('formNuevaCuenta');
+      const abrir = form.classList.contains('hidden');
+      form.classList.toggle('hidden', !abrir);
+      if (abrir) {
+        $('nuevaCuentaNombre').focus();
+      }
+    });
+    $('btnCancelarNuevaCuenta').addEventListener('click', () => {
+      $('formNuevaCuenta').classList.add('hidden');
+    });
+    $('nuevaCuentaNombre').addEventListener('input', actualizarPreviewNombreCuenta);
+    $('nuevaCuentaSaldo').addEventListener('input', (e) => mascaraMontoConSigno(e.target));
+    $('formNuevaCuenta').addEventListener('submit', manejarSubmitNuevaCuenta);
+
+    $('listaCuentasPerfil').addEventListener('click', (e) => {
+      const btnInit = e.target.closest('[data-edit-init]');
+      if (btnInit) {
+        abrirModalSaldoInicial(btnInit.getAttribute('data-edit-init'));
+        return;
+      }
+      const btnAdj = e.target.closest('[data-adjust-acc]');
+      if (btnAdj) {
+        abrirModalAjusteSaldo(btnAdj.getAttribute('data-adjust-acc'));
+      }
+    });
+
+    $('btnAbrirAjusteRapido').addEventListener('click', () => abrirModalAjusteSaldo());
+    $('inputSaldoInicial').addEventListener('input', (e) => mascaraMontoConSigno(e.target));
+    $('formSaldoInicial').addEventListener('submit', manejarSubmitSaldoInicial);
+
+    $('ajusteCuenta').addEventListener('change', actualizarInfoAjusteSaldo);
+    $('ajusteSaldoReal').addEventListener('input', (e) => {
+      mascaraMontoConSigno(e.target);
+      actualizarPreviewAjuste();
+    });
+    $('formAjusteSaldo').addEventListener('submit', manejarSubmitAjusteSaldo);
+
     $('btnTheme').addEventListener('click', rotarTema);
     $('btnThemeAuth').addEventListener('click', rotarTema);
     $('btnSync').addEventListener('click', () => sincronizarTodo({ silencioso: false }));
@@ -1049,6 +1507,7 @@
         renderDashboard(datos.dashboard);
         renderDesgloseCuentas(datos.dashboard.cuentasDetalle || []);
         renderMovimientos();
+        if ($('modalPerfil').classList.contains('active')) renderListaCuentasPerfil();
       }
     });
 
@@ -1057,6 +1516,10 @@
 
     document.querySelectorAll('.tipo-btn').forEach((btn) => {
       btn.addEventListener('click', () => setTipo(btn.dataset.tipo));
+    });
+
+    document.querySelectorAll('.subtipo-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setSubtipoTransferencia(btn.dataset.subtipo));
     });
 
     $('monto').addEventListener('input', (e) => mascaraMonto(e.target));
