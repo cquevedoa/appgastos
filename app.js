@@ -549,8 +549,8 @@
     });
     if (prevMes && mesesSet.has(prevMes)) selMes.value = prevMes;
 
-    // Cuentas disponibles
-    const cuentasSet = new Set((datos && datos.cuentas) || []);
+    // Cuentas disponibles (todas para poder filtrar el historial completo)
+    const cuentasSet = new Set((datos && (datos.cuentasTodasFiltro || datos.cuentas)) || []);
     movs.forEach((m) => { if (m.cuenta) cuentasSet.add(m.cuenta); });
     selCuenta.innerHTML = '<option value="">Todas las cuentas</option>';
     Array.from(cuentasSet).sort().forEach((c) => {
@@ -817,6 +817,64 @@
     }
   }
 
+  function obtenerEmailActual() {
+    const u = usuarioActual || (window.AppStorage.getSession() && window.AppStorage.getSession().user);
+    return String((u && u.email) || '').trim().toLowerCase();
+  }
+
+  function cuentaDisponibleEnCliente(nombre, propietario) {
+    const email = obtenerEmailActual();
+    if (!email) return true;
+    const n = String(nombre || '').trim().toLowerCase();
+    if (n === 'efectivo') return true;
+    const prop = String(propietario || '').trim().toLowerCase();
+    if (prop) {
+      if (prop === 'compartida') return true;
+      return prop === email;
+    }
+    if (n.includes('tdc')) {
+      if (n.includes('rois')) return email.includes('roislenabreu');
+      if (n.includes('carlos')) return email.includes('cquevedoarteaga');
+      if (n.includes('ciudad') && n.includes('visa')) return email.includes('roislenabreu');
+      return email.includes('cquevedoarteaga');
+    }
+    if (n.includes('rois')) return email.includes('roislenabreu');
+    if (n.includes('carlos')) return email.includes('cquevedoarteaga');
+    return true;
+  }
+
+  function obtenerCuentasOrigenEgreso() {
+    if (!datos) return [];
+    if (datos.propietarioFiltrado) return datos.cuentas || [];
+    return (datos.cuentas || []).filter((c) => cuentaDisponibleEnCliente(c));
+  }
+
+  function obtenerCuentasNoTdcPropias() {
+    if (!datos) return [];
+    if (datos.propietarioFiltrado) return datos.cuentasNoTdc || [];
+    return (datos.cuentasNoTdc || []).filter((c) => cuentaDisponibleEnCliente(c));
+  }
+
+  function obtenerCuentasDestinoTransferencia() {
+    if (!datos) return [];
+    return datos.cuentasDestinoTransferencia || datos.cuentasNoTdc || [];
+  }
+
+  function obtenerTdcsPropias() {
+    if (!datos) return [];
+    if (datos.propietarioFiltrado) return datos.tdcs || [];
+    return (datos.tdcs || []).filter((t) => cuentaDisponibleEnCliente(t));
+  }
+
+  function asegurarOpcionEnSelect(selectId, valor) {
+    const sel = $(selectId);
+    const val = String(valor || '').trim();
+    if (!sel || !val) return;
+    const existe = Array.from(sel.options).some((o) => o.value === val);
+    if (!existe) sel.appendChild(new Option(val, val));
+    sel.value = val;
+  }
+
   function setTipo(tipo) {
     if (!datos) return;
     $('tipoOperacion').value = tipo;
@@ -837,23 +895,23 @@
       $('lblSubcategoria').innerHTML = '<span class="material-symbols-rounded">category</span> Categoría / Subcategoría';
       $('lblOrigen').innerHTML = '<span class="material-symbols-rounded">account_balance_wallet</span> Medio de Pago';
       llenarSubcategoriasEgreso();
-      llenarSelect('medioPago', datos.cuentas);
+      llenarSelect('medioPago', obtenerCuentasOrigenEgreso());
     } else if (tipo === 'Ingreso') {
       $('lblSubcategoria').innerHTML = '<span class="material-symbols-rounded">payments</span> Concepto de Ingreso';
       $('lblOrigen').innerHTML = '<span class="material-symbols-rounded">savings</span> Cuenta Destino';
       llenarSelect('subcategoria', datos.ingresos);
-      llenarSelect('medioPago', datos.cuentasNoTdc);
+      llenarSelect('medioPago', obtenerCuentasNoTdcPropias());
     } else if (tipo === 'Transferencia') {
       $('lblOrigen').innerHTML = '<span class="material-symbols-rounded">output</span> Cuenta Origen';
       $('lblDestino').innerHTML = '<span class="material-symbols-rounded">input</span> Cuenta Destino';
-      llenarSelect('medioPago', datos.cuentasNoTdc);
-      llenarSelect('cuentaDestino', datos.cuentasNoTdc);
+      llenarSelect('medioPago', obtenerCuentasNoTdcPropias());
+      llenarSelect('cuentaDestino', obtenerCuentasDestinoTransferencia());
       setSubtipoTransferencia($('subtipoTransferencia').value || 'Interna');
     } else if (tipo === 'Pago TDC') {
       $('lblOrigen').innerHTML = '<span class="material-symbols-rounded">account_balance</span> Cuenta que Paga';
       $('lblDestino').innerHTML = '<span class="material-symbols-rounded">credit_card</span> Tarjeta a Pagar';
-      llenarSelect('medioPago', datos.cuentasNoTdc);
-      llenarSelect('cuentaDestino', datos.tdcs);
+      llenarSelect('medioPago', obtenerCuentasNoTdcPropias());
+      llenarSelect('cuentaDestino', obtenerTdcsPropias());
     }
 
     if (!$('editandoRow').value) {
@@ -970,12 +1028,12 @@
 
     $('monto').value = String(m.monto).replace('.', ',');
     mascaraMonto($('monto'));
-    $('medioPago').value = m.cuenta || '';
+    asegurarOpcionEnSelect('medioPago', m.cuenta || '');
     actualizarCuotas();
 
     let descLimpia = m.descripcion || '';
     if (tipoOpUI === 'Pago TDC') {
-      $('cuentaDestino').value = m.titulo || '';
+      asegurarOpcionEnSelect('cuentaDestino', m.titulo || '');
       const prefijo = 'Pago de tarjeta: ' + (m.titulo || '');
       if (descLimpia.startsWith(prefijo)) {
         descLimpia = descLimpia.slice(prefijo.length).trim();
@@ -984,10 +1042,10 @@
       const subtipo = m.subtipoTransferencia || 'Interna';
       setSubtipoTransferencia(subtipo);
       if (subtipo === 'Interna') {
-        const cuentas = (datos && datos.cuentasNoTdc) || [];
+        const cuentas = obtenerCuentasDestinoTransferencia();
         const matchCuenta = cuentas.find((c) => descLimpia.startsWith('A: ' + c));
         if (matchCuenta) {
-          $('cuentaDestino').value = matchCuenta;
+          asegurarOpcionEnSelect('cuentaDestino', matchCuenta);
           descLimpia = descLimpia.slice(('A: ' + matchCuenta).length).trim();
         }
       }
@@ -1213,12 +1271,14 @@
 
   function obtenerCuentasConfig() {
     if (datos && datos.dashboard && Array.isArray(datos.dashboard.cuentasConfig)) {
-      return datos.dashboard.cuentasConfig;
+      if (datos.propietarioFiltrado) return datos.dashboard.cuentasConfig;
+      return datos.dashboard.cuentasConfig.filter((c) => cuentaDisponibleEnCliente(c.cuenta, c.propietario));
     }
-    return ((datos && datos.cuentasNoTdc) || []).map((nombre) => ({
+    return obtenerCuentasNoTdcPropias().map((nombre) => ({
       cuenta: nombre,
       saldoInicial: 0,
       saldo: 0,
+      esCompartida: nombre.toLowerCase() === 'efectivo',
       esDefault: nombre.toLowerCase() === 'efectivo'
     }));
   }
@@ -1239,7 +1299,7 @@
     const sufijo = obtenerSufijoUsuario();
     const tagEl = $('perfilTagInfo');
     if (sufijo) {
-      tagEl.textContent = `Las nuevas cuentas que agregues llevarán automáticamente ${sufijo} (salvo Efectivo).`;
+      tagEl.textContent = `Mostrando tus cuentas ${sufijo} y Efectivo (compartido). Las nuevas cuentas llevarán ${sufijo} y quedarán asociadas a tu correo.`;
       tagEl.classList.remove('hidden');
     } else {
       tagEl.classList.add('hidden');
@@ -1262,12 +1322,15 @@
 
     cont.innerHTML = cuentas.map((c) => {
       const esNeg = (Number(c.saldo) || 0) < 0;
+      const badgeHtml = c.esDefault
+        ? '<span class="badge-default">Compartida</span>'
+        : (c.esCompartida ? '<span class="badge-default">Compartida</span>' : '');
       return `
         <div class="account-card">
           <div class="account-card-top">
             <div class="account-name-wrap">
               <span class="account-name">${escapeHtml(c.cuenta)}</span>
-              ${c.esDefault ? '<span class="badge-default">Por defecto</span>' : ''}
+              ${badgeHtml}
             </div>
             <span class="account-balance${esNeg ? ' negative' : ''}">${formatearMoneda(c.saldo)}</span>
           </div>

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'appgastos-pwa-v6';
+const CACHE_VERSION = 'appgastos-pwa-v7';
 const FONT_CACHE = 'appgastos-fonts-v1';
 
 const APP_SHELL_ASSETS = [
@@ -8,7 +8,7 @@ const APP_SHELL_ASSETS = [
   './config.js',
   './storage.js?v=3',
   './api.js?v=3',
-  './app.js?v=6',
+  './app.js?v=7',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
